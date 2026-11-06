@@ -1,6 +1,36 @@
 
 # nanoGPT
 
+## MultiMax experiments in this fork
+
+This fork adds three opt-in variants: **Baseline**, **Attention MultiMax**, and
+**Attention + LM Head MultiMax**, without an extra MultiMax bias. Original defaults
+remain baseline. See [the MultiMax experiment guide](MULTIMAX.md) for the formula,
+matched-budget configurations, launch commands, tests, and checkpoint limitations.
+
+### Historical validation-loss curves
+
+![Validation loss for Baseline, Attention MultiMax, and Attention + LM Head MultiMax](assets/multimax_three_variants_val_loss.png)
+
+Gray: Baseline. Blue: Attention MultiMax. Red: Attention + LM Head MultiMax
+(without an extra `+b`; labeled “attn + out” in the original figure).
+
+| Historical run | Minimum validation CE ↓ | Step at minimum |
+|---|---:|---:|
+| Baseline | 2.8401 | 570,000 |
+| Attention MultiMax | 2.8390 | 596,000 |
+| Attention + LM Head MultiMax | 2.8313 | 502,000 |
+
+The original three-run figure is reproduced unchanged: steps >=5,000 (first
+recorded point: 6,000), first observation per duplicate step, no added smoothing;
+the secondary axis is perplexity (`exp(CE)`). Each curve is a single run, not a
+multi-seed average. These are **historical results, not results produced by this
+new implementation**. Final-checkpoint configurations record micro-batch 8 for
+Baseline/Attention and 12 for Attention + LM Head, both with accumulation 40
+and context 1024. Full-run configuration history is unverified, so this is not
+a strictly matched-token-budget ablation and does not establish causal gains.
+The new configs above standardize the budget for future comparisons.
+
 ![nanoGPT](assets/nanogpt.jpg)
 
 

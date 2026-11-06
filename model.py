@@ -15,6 +15,30 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+class MultiMax(nn.Module):
+    """Eight shared scalars: four thresholds and four coefficients, no extra bias.
+
+    This is the project's segmented-ReLU transform, not torch.nn.SELU.
+    Apply to finite scores BEFORE the causal mask and softmax, or to LM logits
+    before cross-entropy. Each attention layer owns an independent instance.
+    """
+
+    def __init__(self):
+        super().__init__()
+        # Initialization is deferred until after the common GPT weights are built.
+        self.ranges = nn.Parameter(torch.zeros(4))
+        self.ts = nn.Parameter(torch.zeros(4))
+
+    def reset_parameters(self):
+        nn.init.trunc_normal_(self.ts, std=0.02)
+        nn.init.trunc_normal_(self.ranges, std=0.02)
+
+    def forward(self, x):
+        return (x + self.ts[0] * F.relu(self.ranges[0] - x)
+                + self.ts[1] * F.relu(x - self.ranges[1])
+                + self.ts[2] * F.relu(self.ranges[2] - x).square()
+                + self.ts[3] * F.relu(x - self.ranges[3]).square())
+
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
 
@@ -42,9 +66,11 @@ class CausalSelfAttention(nn.Module):
         self.n_embd = config.n_embd
         self.dropout = config.dropout
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
-        self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
+        self.multimax = MultiMax() if config.multimax in ('attention', 'attention_lm_head') else None
+        self.flash = (hasattr(torch.nn.functional, 'scaled_dot_product_attention')
+                      and config.attention_backend == 'auto' and self.multimax is None)
         if not self.flash:
-            print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
+            print("Using explicit causal attention (MultiMax, manual backend, or no SDPA).")
             # causal mask to ensure that attention is only applied to the left in the input sequence
             self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
@@ -65,6 +91,8 @@ class CausalSelfAttention(nn.Module):
         else:
             # manual implementation of attention
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+            if self.multimax is not None:
+                att = self.multimax(att)
             att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
@@ -114,6 +142,14 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    multimax: str = 'none' # none, attention, attention_lm_head
+    attention_backend: str = 'auto' # auto preserves upstream SDPA; manual for matched ablations
+
+    def __post_init__(self):
+        if self.multimax not in ('none', 'attention', 'attention_lm_head'):
+            raise ValueError(f"Unknown MultiMax variant: {self.multimax}")
+        if self.attention_backend not in ('auto', 'manual'):
+            raise ValueError(f"Unknown attention backend: {self.attention_backend}")
 
 class GPT(nn.Module):
 
@@ -136,6 +172,7 @@ class GPT(nn.Module):
         # This behavior is deprecated and will be an error in future versions"
         # not 100% sure what this is, so far seems to be harmless. TODO investigate
         self.transformer.wte.weight = self.lm_head.weight # https://paperswithcode.com/method/weight-tying
+        self.lm_head_multimax = MultiMax() if config.multimax == 'attention_lm_head' else None
 
         # init all weights
         self.apply(self._init_weights)
@@ -143,6 +180,14 @@ class GPT(nn.Module):
         for pn, p in self.named_parameters():
             if pn.endswith('c_proj.weight'):
                 torch.nn.init.normal_(p, mean=0.0, std=0.02/math.sqrt(2 * config.n_layer))
+
+        # Preserve identical common weights AND the subsequent data RNG stream
+        # across variants at a fixed seed. The original transform uses std=.02
+        # truncated-normal thresholds/coefficients, not identity initialization.
+        with torch.random.fork_rng(devices=[]):
+            for module in self.modules():
+                if isinstance(module, MultiMax):
+                    module.reset_parameters()
 
         # report number of parameters
         print("number of parameters: %.2fM" % (self.get_num_params()/1e6,))
@@ -184,10 +229,14 @@ class GPT(nn.Module):
         if targets is not None:
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x)
+            if self.lm_head_multimax is not None:
+                logits = self.lm_head_multimax(logits)
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             logits = self.lm_head(x[:, [-1], :]) # note: using list [-1] to preserve the time dim
+            if self.lm_head_multimax is not None:
+                logits = self.lm_head_multimax(logits)
             loss = None
 
         return logits, loss
