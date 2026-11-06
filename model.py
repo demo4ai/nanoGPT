@@ -16,7 +16,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 class MultiMax(nn.Module):
-    """Eight shared scalars: four thresholds and four coefficients, no extra bias.
+    """Eight shared scalars: four thresholds and four coefficients.
 
     This is the project's segmented-ReLU transform, not torch.nn.SELU.
     Apply to finite scores BEFORE the causal mask and softmax, or to LM logits

@@ -54,7 +54,7 @@ n_head = 12
 n_embd = 768
 dropout = 0.0 # for pretraining 0 is good, for finetuning try 0.1+
 bias = False # do we use bias inside LayerNorm and Linear layers?
-multimax = 'none' # none, attention, attention_lm_head (no MultiMax +b)
+multimax = 'none' # none, attention, attention_lm_head
 attention_backend = 'auto' # manual gives all ablation arms the same attention path
 seed = 1337
 # adamw optimizer

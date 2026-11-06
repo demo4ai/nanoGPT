@@ -1,6 +1,6 @@
 # MultiMax in nanoGPT
 
-This fork supports three variants, with no extra additive `+b`:
+This fork supports three variants:
 
 | Variant | `multimax` | Insertion points | Extra parameters (12 layers) |
 |---|---|---|---:|

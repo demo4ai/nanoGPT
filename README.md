@@ -4,7 +4,7 @@
 ## MultiMax experiments in this fork
 
 This fork adds three opt-in variants: **Baseline**, **Attention MultiMax**, and
-**Attention + LM Head MultiMax**, without an extra MultiMax bias. Original defaults
+**Attention + LM Head MultiMax**. Original defaults
 remain baseline. See [the MultiMax experiment guide](MULTIMAX.md) for the formula,
 matched-budget configurations, launch commands, tests, and checkpoint limitations.
 
@@ -13,7 +13,7 @@ matched-budget configurations, launch commands, tests, and checkpoint limitation
 ![Validation loss for Baseline, Attention MultiMax, and Attention + LM Head MultiMax](assets/multimax_three_variants_val_loss.png)
 
 Gray: Baseline. Blue: Attention MultiMax. Red: Attention + LM Head MultiMax
-(without an extra `+b`; labeled “attn + out” in the original figure).
+(labeled “attn + out” in the original figure).
 
 | Historical run | Minimum validation CE ↓ | Step at minimum |
 |---|---:|---:|
