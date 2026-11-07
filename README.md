@@ -21,6 +21,14 @@ Gray: Baseline. Blue: Attention MultiMax. Red: Attention + LM Head MultiMax
 | Attention MultiMax | 2.8390 | 596,000 |
 | Attention + LM Head MultiMax | 2.8313 | 502,000 |
 
+Original training logs (unaltered contents, including repeated evaluations):
+
+- [Baseline](results/historical/Baseline.log)
+- [Attention MultiMax](results/historical/MultiMax_Attention.log)
+- [Attention + LM Head MultiMax](results/historical/MultiMax_Attention_LM_Head.log)
+
+Each log records step, training loss, and validation loss through step 600,000.
+
 The original three-run figure is reproduced unchanged: steps >=5,000 (first
 recorded point: 6,000), first observation per duplicate step, no added smoothing;
 the secondary axis is perplexity (`exp(CE)`). Each curve is a single run, not a
